@@ -11,7 +11,7 @@
 #import "DOGlobalAppearance.h"
 #import "DOThemeManager.h"
 
-@implementation DOiOSSupportButton
+@implementation DOJailbreakButton
 
 - (instancetype)initWithAction:(UIAction *)actions
 {
@@ -52,7 +52,7 @@
     topPadding += 35;
     
     [self setupLog: topPadding];
-    [self setupiOSSupportPicker: topPadding];
+    [self setupPackageManagerPicker: topPadding];
     
     [NSLayoutConstraint deactivateConstraints:constraints];
 
@@ -66,7 +66,7 @@
     [self.button setUserInteractionEnabled:NO];
 
     [UIView animateWithDuration: 0.2 animations:^{ [self.button setAlpha:0.0]; }];
-    [UIView animateWithDuration:0.75 delay:0.0 usingSpringWithDamping:0.9 initialSpringVelocity:2.0  options: UIViewAnimationOptionCurveEaseInOut animations:^{
+    [UIView animateWithDuration:0.75 delay:0.0 usingSpringWithDamping:0.9 initialSpringVelocity:2.0 options:UIViewAnimationOptionCurveEaseInOut animations:^{
         [window layoutIfNeeded];
         [self.button setAlpha:0.0];
     } completion:nil];
@@ -75,7 +75,7 @@
         [self setupTitle];
     });
 
-    if ([[DOUIManager sharedInstance] enablediOSSupportKeys].count > 0)
+    if ([[DOUIManager sharedInstance] enabledPackageManagerKeys].count > 0)
     {
         [self unlockMutex];
     }
@@ -83,12 +83,58 @@
 
 - (void)setupLog: (float)topPadding
 {
-    // Tương tự như trước, chỉ cần thay đổi tên biến và thông điệp nếu cần
+    UIWindow *window = [[UIApplication sharedApplication] keyWindow];
+
+    if ([[DOUIManager sharedInstance] isDebug])
+        self.logView = [[DODebugLogView alloc] init];
+    else
+        self.logView = [[DOLyricsLogView alloc] init];
+    
+    [[DOUIManager sharedInstance] setLogView:self.logView];
+
+    self.logView.translatesAutoresizingMaskIntoConstraints = NO;
+    [self addSubview:self.logView];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [self.logView.leadingAnchor constraintEqualToAnchor:window.leadingAnchor],
+        [self.logView.trailingAnchor constraintEqualToAnchor:window.trailingAnchor],
+        [self.logView.topAnchor constraintEqualToAnchor:window.topAnchor constant:topPadding],
+        [self.logView.bottomAnchor constraintEqualToAnchor:window.bottomAnchor constant:0]
+    ]];
+
+    [window layoutIfNeeded];
 }
 
-- (void)setupiOSSupportPicker: (float)topPadding
+- (void)setupPackageManagerPicker: (float)topPadding
 {
-    // Thay đổi tên phương thức và logic nếu cần
+    UIWindow *window = [[UIApplication sharedApplication] keyWindow];
+
+    if ([[DOUIManager sharedInstance] enabledPackageManagerKeys].count > 0)
+        return;
+
+    self.pkgManagerPickerView = [[DOPkgManagerPickerView alloc] initWithCallback:^(BOOL success) {
+        [self.pkgManagerPickerView removeFromSuperview];
+        self.logView.hidden = NO;
+        [self unlockMutex];
+    }];
+
+    self.pkgManagerPickerView.translatesAutoresizingMaskIntoConstraints = NO;
+    self.pkgManagerPickerView.alpha = 0.0;
+
+    [self addSubview:self.pkgManagerPickerView];
+
+    [NSLayoutConstraint activateConstraints:@[
+       [self.pkgManagerPickerView.leadingAnchor constraintEqualToAnchor:window.leadingAnchor],
+       [self.pkgManagerPickerView.trailingAnchor constraintEqualToAnchor:window.trailingAnchor],
+       [self.pkgManagerPickerView.topAnchor constraintEqualToAnchor:window.topAnchor constant:topPadding],
+       [self.pkgManagerPickerView.bottomAnchor constraintEqualToAnchor:window.bottomAnchor constant:0]
+    ]];
+    
+    [UIView animateWithDuration:0.25 delay:0.25 options:UIViewAnimationOptionCurveEaseInOut animations:^{
+        self.pkgManagerPickerView.alpha = 1.0;
+    } completion:nil];
+
+    [window layoutIfNeeded];
 }
 
 - (void)setupTitle
@@ -125,6 +171,35 @@
     ]];
 }
 
-// Các phương thức khác giữ nguyên
+- (void)setEnabled:(BOOL)enabled
+{
+    self.button.userInteractionEnabled = enabled;
+    if (enabled) {
+        self.alpha = 1.0;
+    } else {
+        self.alpha = 0.7;
+    }
+}
+
+- (BOOL)isEnabled
+{
+    return self.button.userInteractionEnabled;
+}
+
+#pragma mark - Mutex
+
+-(void)lockMutex
+{
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        pthread_mutex_init(&self->_canStartJailbreak, NULL);
+    });
+    pthread_mutex_lock(&self->_canStartJailbreak);
+}
+
+-(void)unlockMutex
+{
+    pthread_mutex_unlock(&self->_canStartJailbreak);
+}
 
 @end
